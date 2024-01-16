@@ -9,57 +9,50 @@ import tkinter as tk
 from tkinter import simpledialog, Label, BOTH, YES
 from PIL import Image, ImageTk
 
-def rotate_and_move_rectangle_input(angle):
+def rotate_and_move_rectangle_input(angle, screen_limit=1000):
     # Read the rectangle data from the file
     with open('rectangle_data.txt', 'r') as f:
         x, y, width, height = map(int, f.readline().split())
 
-    # Get the screen resolution
-    screen_width = os.get_terminal_size().columns
-    screen_height = os.get_terminal_size().lines
+    # Create a black rectangle image with size width x height and an alpha channel
+    rectangle = np.zeros((height, width, 4), dtype=np.uint8)
+    rectangle[:, :, :3] = 0  # Set BGR channels to 0 (black)
+    rectangle[:, :, 3] = 255  # Set alpha channel to 255 (fully opaque)
 
-    # Calculate the scale factor if the rectangle exceeds the screen size
-    scale_factor = min(screen_width / width, screen_height / height, 1)
+    # Get the rotation matrix
+    rotation_matrix = cv2.getRotationMatrix2D((width // 2, height // 2), angle, 1)
 
-    # Scale the rectangle dimensions
-    width = int(width * scale_factor) // 2
-    height = int(height * scale_factor) // 2
+    # Perform the rotation on the rectangle for the BGR channels
+    rotated_rectangle = cv2.warpAffine(rectangle[:, :, :3], rotation_matrix, (width, height))
+
+    # Create a rotated alpha channel
+    rotated_alpha = cv2.warpAffine(rectangle[:, :, 3], rotation_matrix, (width, height))
+
+    # Combine the rotated BGR channels and the rotated alpha channel
+    rotated_rectangle = cv2.merge([rotated_rectangle, rotated_alpha])
 
     # Calculate the new size of the window
-    window_size = max(width, height)
+    window_size = max(rotated_rectangle.shape[0], rotated_rectangle.shape[1])
 
     # Create a white background image with size window_size x window_size
-    image = np.ones((window_size, window_size, 3), dtype=np.uint8) * 255
+    background = np.ones((window_size, window_size, 4), dtype=np.uint8) * 255
+    background[:, :, 3] = 255  # Set alpha channel to 255 (fully opaque)
 
-    # Get the rectangle's center
-    center_x = window_size // 2
-    center_y = window_size // 2
+    # Calculate the position to paste the rotated rectangle onto the background
+    start_x = (window_size - rotated_rectangle.shape[1]) // 2
+    start_y = (window_size - rotated_rectangle.shape[0]) // 2
 
-    # Draw the rectangle at the center of the image
-    cv2.rectangle(image, (center_x - width // 2, center_y - height // 2), (center_x + width // 2, center_y + height // 2), (0, 0, 0), -1)
-
-    # Get the rotation matrix
-    rotation_matrix = cv2.getRotationMatrix2D((center_x, center_y), angle, 1)
-
-    # Perform the rotation on the image
-    rotated_image = cv2.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]))
-
-    # Get the rotation matrix
-    rotation_matrix = cv2.getRotationMatrix2D((center_x, center_y), angle, 1)
-
-    # Perform the rotation on the image
-    rotated_image = cv2.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]))
-
-    # Scale the image
-    rotated_image = cv2.resize(rotated_image, (0, 0), fx=SCALE_FACTOR, fy=SCALE_FACTOR)
-
-    # Save the image to a file
-    cv2.imwrite('rotated_image.png', rotated_image)
+    # Paste the rotated rectangle onto the background
+    background[start_y:start_y+rotated_rectangle.shape[0], start_x:start_x+rotated_rectangle.shape[1]] = rotated_rectangle
 
     # Convert the image from BGR to RGB
-    rotated_image = cv2.cvtColor(rotated_image, cv2.COLOR_BGR2RGB)
+    result = cv2.cvtColor(background, cv2.COLOR_BGRA2RGBA)
 
-    return rotated_image, (center_x - width // 2, center_y - height // 2, width, height)
+    # Save the result to a temporary file
+    Image.fromarray(result).save('temp.png')
+
+    return result, (start_x, start_y, rotated_rectangle.shape[1], rotated_rectangle.shape[0])
+
 
 def rotate_and_move_rectangle_mouse(image_path, rectangle, angle=None):
     # Read the rectangle data from the file
@@ -139,8 +132,6 @@ def rotate_and_move_rectangle_mouse(image_path, rectangle, angle=None):
 
     return image, (x, y, max_dim, max_dim)
 
-SCALE_FACTOR = 10  # Adjust this value to scale the image
-
 class ImageWindow:
     def __init__(self):
         self.root = tk.Toplevel()
@@ -154,11 +145,10 @@ class ImageWindow:
         self.root = tk.Toplevel()  # Create a new window
         self.photo = ImageTk.PhotoImage(image)
         self.label = tk.Label(self.root, image=self.photo)
-        self.label.pack()
+        self.label.pack()  # Allow the label to expand to fill the window
         # Resize the window to fit the image
-        self.root.geometry(f"{image.width*SCALE_FACTOR+5}x{image.height*SCALE_FACTOR+5}")
+        self.root.geometry(f"{self.photo.width()}x{self.photo.height()}")
         self.root.deiconify()  # Show the window
-
 
     def start(self):
         self.root.mainloop()
@@ -166,15 +156,26 @@ class ImageWindow:
 def rotate_and_move_rectangle_input_wrapper():
     window = ImageWindow()
 
-    # The rest of your code remains the same
+    # Ask the user for the rotation angle
     angle = simpledialog.askfloat("Input", "Enter the angle to rotate the rectangle:", parent=window.root)
+
+    # Rotate the rectangle and get the result
     result, rectangle = rotate_and_move_rectangle_input(angle)
+
+    # Save the result to a temporary file
+    cv2.imwrite('temp.png', result)
+
+    # Read the temporary file to ensure it can be read
+    temp = cv2.imread('temp.png')
 
     # Convert the result from a NumPy array to a PIL Image
     result_pil = Image.fromarray(result)
 
+    # Display the image
     window.display_image(result_pil)
-    window.start()  # Start the Tkinter event loop
+
+    # Start the Tkinter event loop
+    window.start()
 
     return result, rectangle, window
 
