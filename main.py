@@ -11,7 +11,7 @@ from funtion_1 import create_white_background
 from funtion_2 import create_image_without_display, draw_rectangle_on_image
 from funtion_3 import move_rectangle
 from function_4 import rotate_and_move_rectangle_input, rotate_and_move_rectangle_mouse, rotate_and_move_rectangle_input_wrapper, rotate_and_move_rectangle_mouse_wrapper
-
+from funtion_5 import resize_rectangle_by_percentage_wrapper, resize_rectangle_by_mouse_wrapper, resize_rectangle_by_percentage, resize_rectangle_by_mouse
 
 def main():
     root = Tk()
@@ -63,14 +63,32 @@ def main():
     function_4_menu = Menu(button4, tearoff=0)
     button4.config(menu=function_4_menu)
 
-    # Add commands to the menu
-    function_4_menu.add_command(label="By Input", command=rotate_and_move_rectangle_input_wrapper)
-    function_4_menu.add_command(label="By Mouse", command=rotate_and_move_rectangle_mouse_wrapper)
+    # Create a submenu
+    rotate_submenu = Menu(function_4_menu, tearoff=0)
+
+    # Add commands to the submenu
+    rotate_submenu.add_command(label="By Input", command=rotate_and_move_rectangle_input_wrapper)
+    rotate_submenu.add_command(label="By Mouse", command=rotate_and_move_rectangle_mouse_wrapper)
+
+    # Add the submenu to the main menu
+    function_4_menu.add_cascade(label="Rotate", menu=rotate_submenu)
 
     # Add a new button for clearing the rectangle data file
     def clear_rectangle_data():
         if os.path.exists('rectangle_data.txt'):
             remove('rectangle_data.txt')
+
+    # Create a menubutton for function_5
+    button5 = Menubutton(frame, text="Resize Rectangle", relief="raised")
+    button5.pack()
+
+    # Create a menu for function_5
+    function_5_menu = Menu(button5, tearoff=0)
+    button5.config(menu=function_5_menu)
+
+    # Add commands to the function_5 menu
+    function_5_menu.add_command(label="By Percentage", command=resize_rectangle_by_percentage_wrapper)
+    function_5_menu.add_command(label="By Mouse", command=resize_rectangle_by_mouse_wrapper)
 
     button_clear = Button(frame, text="Clear data of rectangle", command=clear_rectangle_data, highlightthickness=0, bd=1)
     button_clear.pack()
